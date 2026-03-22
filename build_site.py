@@ -2,7 +2,7 @@ import os
 import urllib.parse
 
 # Настройки
-HTML_OUTPUT = 'Index.html'
+HTML_OUTPUT = 'index.html'
 PHOTOS_DIR = 'photos'
 VIDEO_DIR = 'TO_VK'
 LINKS_FILE = 'video_links.txt'
