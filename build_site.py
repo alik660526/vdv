@@ -8,7 +8,6 @@ LOGO_PATH = 'images/logo.jpg'
 THUMBS_DIR = 'v-thumbs'
 
 def format_date(filename):
-    # Ищем дату в формате @16-10-2022_20-27-34
     match = re.search(r'@(\d{2}-\d{2}-\d{4})_(\d{2}-\d{2}-\d{2})', filename)
     if match:
         date_str, time_str = match.groups()
@@ -38,12 +37,9 @@ def get_video_data():
 
 def get_photos_data():
     if not os.path.exists(PHOTO_DIR): return []
-    # Собираем список словарей с именем файла и форматированной датой
     photos = []
     files = [f for f in os.listdir(PHOTO_DIR) if f.lower().endswith('.webp') and '_thumb' not in f]
-    # Сортируем по дате изменения файла (самые свежие сверху)
     files.sort(key=lambda x: os.path.getmtime(os.path.join(PHOTO_DIR, x)), reverse=True)
-    
     for f in files:
         photos.append({
             'file': f,
@@ -60,7 +56,7 @@ def build():
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ВПК Юный Десантник</title>
     <style>
         body {{ font-family: sans-serif; background: #f0f2f5; margin: 0; padding-bottom: 50px; color: #1c1e21; }}
@@ -69,8 +65,15 @@ def build():
         h1 {{ font-size: 22px; margin: 0; color: #003366; }}
         
         .container {{ max-width: 600px; margin: auto; padding: 10px; }}
+        
+        /* РАСТЯГИВАЕМ КОНТЕНТ НА МОБИЛКАХ */
+        @media (max-width: 600px) {{
+            .container {{ padding: 0; }}
+            .post-card {{ border-radius: 0; margin-bottom: 10px; border-left: none; border-right: none; }}
+        }}
+
         .post-card {{ background: white; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow: hidden; }}
-        .post-header {{ padding: 15px; font-weight: bold; border-bottom: 1px solid #eee; background: #fafafa; font-size: 14px; }}
+        .post-header {{ padding: 15px; font-weight: bold; border-bottom: 1px solid #eee; background: #fafafa; font-size: 14px; color: #555; }}
         
         .video-box {{ position: relative; padding-bottom: 56.25%; height: 0; background: #003366; cursor: pointer; }}
         .video-box img {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }}
@@ -82,10 +85,48 @@ def build():
         .play-btn::after {{ content: ''; border-style: solid; border-width: 10px 0 10px 18px; border-color: transparent transparent transparent white; margin-left: 4px; }}
         
         iframe {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; z-index: 10; }}
-        .post-content img {{ width: 100%; display: block; background: #eee; min-height: 250px; }}
         
-        .section-title {{ font-size: 18px; color: #003366; text-transform: uppercase; margin: 35px 0 15px; font-weight: bold; border-left: 6px solid #003366; padding-left: 12px; }}
+        /* СТИЛИ ДЛЯ ФОТО В ЛЕНТЕ */
+        .post-content img {{ 
+            width: 100%; display: block; background: #eee; min-height: 250px; 
+            cursor: zoom-in; /* Иконка лупы при наведении */
+            transition: opacity 0.3s;
+        }}
+        .post-content img:hover {{ opacity: 0.9; }}
+        
+        .section-title {{ font-size: 18px; color: #003366; text-transform: uppercase; margin: 35px 15px 15px; font-weight: bold; border-left: 6px solid #003366; padding-left: 12px; }}
         #loader {{ text-align: center; padding: 30px; color: #65676b; font-style: italic; }}
+
+        /* --- СТИЛИ ДЛЯ ПОЛНОЭКРАННОЙ ГАЛЕРЕИ (LIGHTBOX) --- */
+        #lightbox {{
+            display: none; /* Скрыт по умолчанию */
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); /* Темный фон */
+            z-index: 2000; /* Поверх всего */
+            align-items: center; justify-content: center;
+            cursor: zoom-out; /* Иконка свертывания */
+            opacity: 0; transition: opacity 0.3s ease;
+        }}
+        #lightbox.active {{ display: flex; opacity: 1; }} /* При активации */
+        
+        #lightbox img {{
+            max-width: 95%; max-height: 95%; /* Не вылезать за границы экрана */
+            box-shadow: 0 5px 25px rgba(0,0,0,0.5);
+            transform: scale(0.9); transition: transform 0.3s ease;
+            border: 2px solid white; border-radius: 4px;
+        }}
+        #lightbox.active img {{ transform: scale(1); }} /* Плавное увеличение */
+
+        /* Кнопка закрытия (крестик) */
+        #lightbox-close {{
+            position: absolute; top: 20px; right: 20px;
+            width: 40px; height: 40px; background: rgba(255,255,255,0.2);
+            color: white; font-size: 30px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; z-index: 2010; transition: 0.2s;
+        }}
+        #lightbox-close:hover {{ background: rgba(255,0,0,0.8); }}
+
     </style>
 </head>
 <body>
@@ -100,6 +141,7 @@ def build():
     <div id="videoList">
     """
 
+    # Видео с заглушками
     for v in v_data:
         img_tag = f'<img src="{v["thumb"]}" loading="lazy">' if v['thumb'] else ''
         html_content += f"""
@@ -115,13 +157,45 @@ def build():
     </div>
     <div class="section-title">📸 Фотоархив</div>
     <div id="photoList"></div>
-    <div id="loader">Листайте вниз для загрузки фото...</div>
+    <div id="loader">Листайте вниз...</div>
+</div>
+
+<div id="lightbox" onclick="closeLightbox()">
+    <div id="lightbox-close">&times;</div>
+    <img id="lightbox-img" src="" alt="Крупный план">
 </div>
 
 <script>
-    const photoData = {p_data}; // Теперь здесь и файл, и дата
+    const photoData = {p_data};
     const pDir = "{PHOTO_DIR}";
     let pIdx = 0;
+
+    // --- ЛОГИКА ГАЛЕРЕИ (JavaScript) ---
+
+    // Открыть фото
+    function openLightbox(imgSrc) {{
+        const lb = document.getElementById('lightbox');
+        const lbImg = document.getElementById('lightbox-img');
+        
+        lbImg.src = imgSrc; // Вставляем адрес фото
+        lb.classList.add('active'); // Показываем блок
+        document.body.style.overflow = 'hidden'; // Запрещаем скролл сайта под фото
+    }}
+
+    // Закрыть фото
+    function closeLightbox() {{
+        const lb = document.getElementById('lightbox');
+        lb.classList.remove('active'); // Скрываем блок
+        document.body.style.overflow = ''; // Возвращаем скролл
+    }}
+
+    // Закрытие по клавише Esc
+    document.addEventListener('keydown', (e) => {{
+        if (e.key === 'Escape') closeLightbox();
+    }});
+
+
+    // --- ОСТАЛЬНАЯ ЛОГИКА (Видео и Подгрузка) ---
 
     function runVideo(div) {{
         document.querySelectorAll('.v-item').forEach(item => {{
@@ -144,9 +218,13 @@ def build():
             const item = photoData[pIdx];
             const card = document.createElement('div');
             card.className = 'post-card';
+            
+            // ДОБАВИЛИ ONCLICK НА КАРТИНКУ
             card.innerHTML = `
                 <div class="post-header">${{item.date}}</div>
-                <div class="post-content"><img src="${{pDir}}/${{item.file}}" loading="lazy"></div>
+                <div class="post-content">
+                    <img src="${{pDir}}/${{item.file}}" loading="lazy" onclick="openLightbox(this.src)">
+                </div>
             `;
             list.appendChild(card);
         }}
@@ -163,7 +241,7 @@ def build():
 """
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
         f.write(html_content)
-    print("Исправлено! Даты под фото вернулись.")
+    print("Супер! Галерея с зумом готова. Проверяй фото!")
 
 if __name__ == "__main__":
     build()
