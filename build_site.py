@@ -4,6 +4,7 @@ import re
 PHOTO_DIR = 'photos'
 VIDEO_FILE = 'video_links.txt'
 OUTPUT_FILE = 'index.html'
+LOGO_PATH = 'images/logo.jpg' 
 
 def format_date(filename):
     match = re.search(r'@(\d{2}-\d{2}-\d{4})_(\d{2}-\d{2}-\d{2})', filename)
@@ -36,8 +37,8 @@ def get_photos():
     return photos
 
 def build():
-    videos = get_video_data()
-    photos = get_photos()
+    v_data = get_video_data()
+    p_data = get_photos()
 
     html_content = f"""
 <!DOCTYPE html>
@@ -45,116 +46,88 @@ def build():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ВПК Юный Десантник | Лента</title>
+    <title>ВПК Юный Десантник</title>
     <style>
         body {{ font-family: sans-serif; background: #f0f2f5; margin: 0; padding-bottom: 50px; color: #1c1e21; }}
-        header {{ background: white; padding: 15px; text-align: center; border-bottom: 1px solid #ddd; position: sticky; top:0; z-index:100; }}
+        header {{ background: white; padding: 20px 15px; text-align: center; border-bottom: 1px solid #ddd; position: sticky; top:0; z-index:100; }}
+        .logo {{ max-width: 180px; height: auto; margin-bottom: 10px; display: block; margin-left: auto; margin-right: auto; }}
         .container {{ max-width: 600px; margin: auto; padding: 10px; }}
-        .post-card {{ background: white; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); overflow: hidden; display: none; }}
-        .post-header {{ padding: 10px; font-weight: bold; border-bottom: 1px solid #eee; }}
-        .post-content img {{ width: 100%; display: block; background: #eee; min-height: 200px; }}
-        .post-footer {{ padding: 8px; color: #65676b; font-size: 13px; }}
+        .post-card {{ background: white; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); overflow: hidden; }}
+        .post-header {{ padding: 12px; font-weight: bold; border-bottom: 1px solid #eee; }}
+        .post-content img {{ width: 100%; display: block; background: #ddd; min-height: 250px; }}
         .video-container {{ position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; background: #000; }}
         .video-container iframe {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }}
-        .section-title {{ font-size: 14px; color: #65676b; text-transform: uppercase; margin: 20px 0 10px; font-weight: bold; }}
-        #loader {{ text-align: center; padding: 20px; color: #65676b; font-size: 14px; }}
+        .section-title {{ font-size: 16px; color: #0056b3; text-transform: uppercase; margin: 30px 0 15px; font-weight: bold; border-left: 5px solid #0056b3; padding-left: 10px; }}
+        #loader {{ text-align: center; padding: 40px; color: #65676b; font-style: italic; }}
     </style>
 </head>
 <body>
 
 <header>
+    <img src="{LOGO_PATH}" alt="Логотип" class="logo">
     <h1>ВПК «Юный Десантник»</h1>
 </header>
 
-<div class="container" id="mainContainer">
-    <div class="section-title">🎬 Видеоархив</div>
+<div class="container">
+    <div class="section-title">🎬 Видеоархив (Всего: {len(v_data)})</div>
     <div id="videoList">
     """
 
-    for v in videos:
+    # Видео выводим ВСЕ СРАЗУ
+    for v in v_data:
         html_content += f"""
-        <div class="post-card video-item">
+        <div class="post-card">
             <div class="post-header">{v['title']}</div>
             <div class="video-container">
                 <iframe src="https://vk.com/video_ext.php?oid={v['oid']}&id={v['id']}" allowfullscreen loading="lazy"></iframe>
             </div>
         </div>"""
 
-    html_content += """
+    html_content += f"""
     </div>
+    
     <div class="section-title">📸 Фотоархив</div>
-    <div id="photoList">
-    """
-
-    for photo in photos:
-        caption = format_date(photo)
-        html_content += f"""
-        <div class="post-card photo-item">
-            <div class="post-content">
-                <img src="{PHOTO_DIR}/{photo}" alt="Фото" loading="lazy">
-            </div>
-            <div class="post-footer">{caption}</div>
-        </div>"""
-
-    html_content += """
-    </div>
-    <div id="loader">Загрузка новых материалов...</div>
+    <div id="photoList"></div>
+    
+    <div id="loader">Листайте вниз для загрузки фото...</div>
 </div>
 
 <script>
-    let videosShown = 0;
-    let photosShown = 0;
-    const videosPerLoad = 3;
-    const photosPerLoad = 10;
-    let isLoading = false;
+    const allPhotos = {p_data};
+    const photoDir = "{PHOTO_DIR}";
+    let currentP = 0;
+    const pStep = 20;
 
-    function showNext() {
-        if (isLoading) return;
-        isLoading = true;
-
-        let hasMore = false;
-
-        // Видео
-        const videoCards = document.querySelectorAll('.video-item');
-        for (let i = videosShown; i < videosShown + videosPerLoad && i < videoCards.length; i++) {
-            videoCards[i].style.display = 'block';
-            hasMore = true;
-        }
-        videosShown += videosPerLoad;
-
-        // Фото
-        const photoCards = document.querySelectorAll('.photo-item');
-        for (let i = photosShown; i < photosShown + photosPerLoad && i < photoCards.length; i++) {
-            photoCards[i].style.display = 'block';
-        }
-        photosShown += photosPerLoad;
-
-        if (videosShown >= videoCards.length && photosShown >= photoCards.length) {
-            document.getElementById('loader').innerHTML = 'Вы просмотрели все материалы';
+    function loadPhotos() {{
+        const pList = document.getElementById('photoList');
+        for(let i=0; i<pStep && currentP < allPhotos.length; i++) {{
+            const p = allPhotos[currentP++];
+            const div = document.createElement('div');
+            div.className = 'post-card';
+            div.innerHTML = `<div class="post-content"><img src="${{photoDir}}/${{p}}" loading="lazy"></div>`;
+            pList.appendChild(div);
+        }}
+        if(currentP >= allPhotos.length) {{
+            document.getElementById('loader').innerHTML = "— Все фото загружены —";
             window.removeEventListener('scroll', handleScroll);
-        } else {
-            document.getElementById('loader').style.display = 'block';
-        }
-        
-        isLoading = false;
-    }
+        }}
+    }}
 
-    function handleScroll() {
-        if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500) {
-            showNext();
-        }
-    }
+    function handleScroll() {{
+        if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 1500) {{
+            loadPhotos();
+        }}
+    }}
 
     window.addEventListener('scroll', handleScroll);
-    showNext(); // Первая порция при загрузке
+    loadPhotos(); // Первая пачка фото
 </script>
-
 </body>
 </html>
 """
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
         f.write(html_content)
-    print(f"Готово! Бесконечная лента настроена.")
+    print("Сайт пересобран. Видео — все сразу, фото — лентой.")
 
 if __name__ == "__main__":
     build()
