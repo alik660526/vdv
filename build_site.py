@@ -1,102 +1,120 @@
 import os
 import urllib.parse
 
-# Настройки
+# --- НАСТРОЙКИ ---
+# Теперь строго с маленькой буквы, чтобы Гитхаб не ругался
 HTML_OUTPUT = 'index.html'
-PHOTOS_DIR = 'photos'
-VIDEO_DIR = 'TO_VK'
-LINKS_FILE = 'video_links.txt'
+PHOTO_DIR = 'Фото'        # Ваша папка с фото
+VIDEO_FILE = 'video_links.txt' # Файл со ссылками ВК
 
-def get_video_links():
-    links = {}
-    if os.path.exists(LINKS_FILE):
-        with open(LINKS_FILE, 'r', encoding='utf-8') as f:
-            for line in f:
-                if '|' in line:
-                    title, url = line.strip().split('|')
-                    links[title.strip()] = url.strip()
-    return links
-
-def build():
-    links_map = get_video_links()
-    
-    # 1. СБОРКА ФОТОГРАФИЙ (Оригинал + Превью)
+def generate_site():
     photo_html = ""
-    if os.path.exists(PHOTOS_DIR):
-        # Берем только оригиналы (без _thumb)
-        files = [f for f in os.listdir(PHOTOS_DIR) if f.lower().endswith('.jpg') and '_thumb' not in f.lower()]
-        for p in sorted(files):
-            thumb = p.replace('.jpg', '_thumb.jpg')
-            # Если превью нет, используем сам оригинал
-            thumb_path = thumb if os.path.exists(os.path.join(PHOTOS_DIR, thumb)) else p
-            
-            enc_orig = urllib.parse.quote(f"photos/{p}")
-            enc_thumb = urllib.parse.quote(f"photos/{thumb_path}")
-            
+    video_html = ""
+
+    # 1. ОБРАБОТКА ФОТОГРАФИЙ
+    if os.path.exists(PHOTO_DIR):
+        photos = [f for f in os.listdir(PHOTO_DIR) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))]
+        for photo in photos:
+            # Кодируем имя файла для ссылок (чтобы пробелы не ломали сайт)
+            photo_url = urllib.parse.quote(f"{PHOTO_DIR}/{photo}")
             photo_html += f'''
             <div class="photo-card">
-                <a href="{enc_orig}" target="_blank">
-                    <img src="{enc_thumb}" loading="lazy" alt="Фото">
+                <a href="{photo_url}" target="_blank">
+                    <img src="{photo_url}" loading="lazy" alt="Фото ВПК">
                 </a>
             </div>'''
+    else:
+        photo_html = "<p>Папка с фото не найдена</p>"
 
-    # 2. СБОРКА ВИДЕО (Превью + Ссылка на ВК)
-    video_html = ""
-    if os.path.exists(VIDEO_DIR):
-        v_thumbs = [f for f in os.listdir(VIDEO_DIR) if f.lower().endswith('.jpg')]
-        for vt in sorted(v_thumbs):
-            # Ищем название видео в ключе ссылки (убираем _thumb.jpg из имени файла)
-            base_name = vt.replace('.mp4_thumb.jpg', '').replace('.mp4_t humb.jpg', '').strip()
-            link = links_map.get(base_name, "#") # Если не нашли, ссылка будет пустой
-            
-            enc_vt = urllib.parse.quote(f"TO_VK/{vt}")
-            video_html += f'''
-            <div class="video-card">
-                <img src="{enc_vt}" class="video-thumb">
-                <div class="video-info">
-                    <div class="video-title">{base_name}</div>
-                    <a class="video-btn" href="{link}" target="_blank">СМОТРЕТЬ В ВК</a>
-                </div>
-            </div>'''
+    # 2. ОБРАБОТКА ВИДЕО (ИЗ ФАЙЛА)
+    if os.path.exists(VIDEO_FILE):
+        with open(VIDEO_FILE, 'r', encoding='utf-8') as f:
+            for line in f:
+                if '|' in line:
+                    title, link = line.strip().split('|')
+                    # Делаем заглушку-превью (синий фон с иконкой видео)
+                    video_html += f'''
+                    <div class="video-card">
+                        <div class="video-thumb-placeholder">🎬</div>
+                        <div class="video-info">
+                            <div class="video-title">{title}</div>
+                            <a class="video-btn" href="{link}" target="_blank">СМОТРЕТЬ В ВК</a>
+                        </div>
+                    </div>'''
+    else:
+        video_html = "<p>Файл со ссылками не найден</p>"
 
-    # 3. HTML ШАБЛОН (Тёмная тема)
+    # 3. ПОЛНЫЙ HTML ШАБЛОН (С ШАПКОЙ И ЛОГОТИПОМ)
     full_html = f'''<!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Архив ВПК Юный Десантник</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ВПК ЮНЫЙ ДЕСАНТНИК - АРХИВ</title>
     <style>
-        body {{ background: #121212; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; }}
-        .container {{ max-width: 1100px; margin: 0 auto; }}
-        h1, h2 {{ text-align: center; color: #4a76a8; border-bottom: 1px solid #333; padding-bottom: 10px; }}
+        body {{ background: #0f172a; color: #f1f5f9; font-family: 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; line-height: 1.6; }}
+        .container {{ max-width: 1100px; margin: 0 auto; text-align: center; }}
         
-        .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-bottom: 40px; }}
-        .photo-card img {{ width: 100%; height: 150px; object-fit: cover; border-radius: 8px; border: 1px solid #333; transition: 0.3s; }}
-        .photo-card img:hover {{ transform: scale(1.05); border-color: #4a76a8; }}
-        
-        .video-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }}
-        .video-card {{ background: #1e1e1e; border-radius: 10px; overflow: hidden; border: 1px solid #333; }}
-        .video-thumb {{ width: 100%; height: 160px; object-fit: cover; }}
-        .video-info {{ padding: 15px; text-align: center; }}
-        .video-title {{ font-size: 14px; margin-bottom: 10px; height: 40px; overflow: hidden; }}
-        .video-btn {{ display: inline-block; background: #4a76a8; color: #fff; padding: 8px 15px; border-radius: 5px; text-decoration: none; font-weight: bold; }}
-        .video-btn:hover {{ background: #3b5d85; }}
+        /* СТИЛЬ ШАПКИ С ЛОГОТИПОМ */
+        .header-block {{ margin-bottom: 40px; padding: 20px; border-bottom: 2px solid #334155; }}
+        .header-logo {{ 
+            width: 180px; height: 180px; 
+            object-fit: cover; 
+            border-radius: 50%; 
+            border: 4px solid #38bdf8; 
+            margin-bottom: 15px; 
+            box-shadow: 0 0 25px rgba(56, 189, 248, 0.4);
+        }}
+        h1 {{ color: #38bdf8; font-size: 2.5em; margin: 10px 0; text-transform: uppercase; letter-spacing: 2px; }}
+        h2 {{ color: #94a3b8; margin-top: 40px; border-left: 5px solid #38bdf8; padding-left: 15px; text-align: left; }}
+
+        /* СЕТКА ФОТО */
+        .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; }}
+        .photo-card img {{ width: 100%; height: 180px; object-fit: cover; border-radius: 10px; transition: 0.3s; border: 1px solid #334155; }}
+        .photo-card img:hover {{ transform: scale(1.03); border-color: #38bdf8; cursor: pointer; }}
+
+        /* СЕТКА ВИДЕО */
+        .video-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }}
+        .video-card {{ background: #1e293b; border-radius: 12px; overflow: hidden; border: 1px solid #334155; transition: 0.3s; }}
+        .video-card:hover {{ border-color: #38bdf8; }}
+        .video-thumb-placeholder {{ background: #334155; height: 150px; display: flex; align-items: center; justify-content: center; font-size: 50px; }}
+        .video-info {{ padding: 20px; }}
+        .video-title {{ font-weight: bold; margin-bottom: 15px; height: 45px; overflow: hidden; color: #f8fafc; }}
+        .video-btn {{ 
+            display: block; background: #0284c7; color: white; 
+            padding: 10px; border-radius: 6px; text-decoration: none; 
+            font-weight: bold; transition: 0.2s; 
+        }}
+        .video-btn:hover {{ background: #0ea5e9; }}
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>ВПК «ЮНЫЙ ДЕСАНТНИК»</h1>
-        <h2>🎥 Видеоархив</h2>
+        
+        <div class="header-block">
+            <img src="images/logo.jpg" class="header-logo" alt="Логотип">
+            <h1>ВПК «ЮНЫЙ ДЕСАНТНИК»</h1>
+            <p style="color: #94a3b8;">г. Павлово • Военно-патриотический клуб</p>
+        </div>
+
+        <h2>🎥 Видеоматериалы</h2>
         <div class="video-grid">{video_html}</div>
-        <h2>📸 Фотогалерея</h2>
+
+        <h2>📸 Фотоархив</h2>
         <div class="grid">{photo_html}</div>
+
+        <footer style="margin-top: 50px; color: #475569; font-size: 0.9em;">
+            © {os.path.getmtime(PHOTO_DIR) if os.path.exists(PHOTO_DIR) else '2026'} ВПК Юный Десантник
+        </footer>
     </div>
 </body>
 </html>'''
 
+    # ЗАПИСЬ В ФАЙЛ
     with open(HTML_OUTPUT, 'w', encoding='utf-8') as f:
         f.write(full_html)
-    print("Сайт успешно собран!")
+    
+    print(f"Сайт успешно собран в файл: {HTML_OUTPUT}")
 
 if __name__ == "__main__":
-    build()
+    generate_site()
